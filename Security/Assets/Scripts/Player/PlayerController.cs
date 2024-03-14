@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
+using Cinemachine;
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -15,6 +16,14 @@ public class PlayerController : MonoBehaviour
     PlayerInputAction InputAction;
     public PlayerInputAction playerInputAction => InputAction;
     CharacterController controller;
+    public CharacterController characterController => controller;
+    CinemachineVirtualCamera cinemachine;
+    public CinemachineVirtualCamera Cinemachine => cinemachine;
+
+    /// <summary>
+    /// 카메라 위치
+    /// </summary>
+    Transform cameraRoot;
 
     /// <summary>
     /// 위치변수
@@ -35,16 +44,6 @@ public class PlayerController : MonoBehaviour
     /// 달리기 속도
     /// </summary>
     float sprintingSpeed = 4.7f;
-
-    /// <summary>
-    /// 웅크리기 감소
-    /// </summary>
-    float crouchDecrease = 1.0f;
-
-    /// <summary>
-    /// 웅크리기 체크
-    /// </summary>
-    bool crouchChecking = false;
 
     /// <summary>
     /// 점프 높이
@@ -70,6 +69,31 @@ public class PlayerController : MonoBehaviour
     /// 점프 카운트(1번으로 제한)
     /// </summary>
     int jumpCount = 0;
+    
+    /// <summary>
+    /// 웅크리기 감소
+    /// </summary>
+    float crouchDecrease = 1.0f;
+
+    /// <summary>
+    /// 웅크리기 체크
+    /// </summary>
+    bool crouchChecking = false;
+
+    /// <summary>
+    /// x방향 전환 민감도
+    /// </summary>
+    float rotateSensitiveX = 7.5f;
+
+    /// <summary>
+    /// y방향 전환 민감도
+    /// </summary>
+    float rotateSensitiveY = 10.0f;
+
+    /// <summary>
+    /// 현재 이동한 y방향 전환
+    /// </summary>
+    float curRotateY = 0.0f;
 
     float Temp = 0.0f;
     Vector3 boxsize = new Vector3(0.25f, 0.125f, 0.25f);
@@ -86,6 +110,8 @@ public class PlayerController : MonoBehaviour
         InputAction = new PlayerInputAction();
 
         controller = GetComponent<CharacterController>();
+        cameraRoot = transform.GetChild(0);
+        cinemachine = GetComponentInChildren<CinemachineVirtualCamera>();
     }
 
     private void OnEnable()
@@ -98,12 +124,16 @@ public class PlayerController : MonoBehaviour
         InputAction.Player.Jump.performed += OnJump;
         InputAction.Player.Crouch.performed += OnCrouch;
         InputAction.Player.Crouch.canceled += OnCrouch;
+        InputAction.Mouse.Enable();
+        InputAction.Mouse.MouseVector2.performed += OnMouseDelta;
     }
 
     
 
     private void OnDisable()
     {
+        InputAction.Mouse.MouseVector2.performed -= OnMouseDelta;
+        InputAction.Mouse.Disable();
         InputAction.Player.Crouch.canceled -= OnCrouch;
         InputAction.Player.Crouch.performed -= OnCrouch;
         InputAction.Player.Jump.performed -= OnJump;
@@ -153,19 +183,23 @@ public class PlayerController : MonoBehaviour
 
     private void OnJump(InputAction.CallbackContext context)
     {
-        if(jumpCount < 1)
+        //웅크리기 상태가 아닐 때
+        if (!crouchChecking)
         {
-            //y이동 값을 점프 높이로 할당
-            moveDir.y = jumpHeight;
-
-            if(jumpCount == 0)
+            if(jumpCount < 1)
             {
-                //목표 지점의 점포 높이
-                jumpCheckHeight = transform.position.y + controller.radius * 0.3f;
+                //y이동 값을 점프 높이로 할당
+                moveDir.y = jumpHeight;
+
+                if(jumpCount == 0)
+                {
+                    //목표 지점의 점포 높이
+                    jumpCheckHeight = transform.position.y + controller.radius * 0.3f;
+                }
+                //점프 상태 = true
+                jumpChecking = true;
+                jumpCount++;
             }
-            //점프 상태 = true
-            jumpChecking = true;
-            jumpCount++;
         }
     }
     
@@ -176,6 +210,8 @@ public class PlayerController : MonoBehaviour
             crouchDecrease = 0.5f;
             currentSpeed = Temp * crouchDecrease;
             crouchChecking = true;
+
+            cinemachine.GetCinemachineComponent<Cinemachine3rdPersonFollow>().ShoulderOffset = new Vector3(0f, -0.5f, 0.0625f);
         }
 
         else
@@ -183,7 +219,28 @@ public class PlayerController : MonoBehaviour
             crouchDecrease = 1.0f;
             currentSpeed = Temp * crouchDecrease;
             crouchChecking = false;
+            
+            cinemachine.GetCinemachineComponent<Cinemachine3rdPersonFollow>().ShoulderOffset = new Vector3(0f, 0.0f, 0.0625f);
         }
+    }
+
+    private void OnMouseDelta(InputAction.CallbackContext context)
+    {
+        //입력받은 마우스 좌표를 저장
+        Vector2 temp = context.ReadValue<Vector2>();
+        //입력받은 좌표를 x방향 전환 민감도 만큼 천천히 이동
+        float rotateX = temp.x * rotateSensitiveX * Time.fixedDeltaTime;
+        //transform에 적용
+        transform.Rotate(Vector3.up, rotateX);
+
+        //입력받은 좌표를 y방향 전환 민감도 만큼 천천히 이동
+        float rotateY = temp.y * rotateSensitiveY * Time.fixedDeltaTime;
+        //계산된 y방향 전환 이동량을 현재 이동한 y방향 전환에 저장
+        curRotateY -= rotateY;
+        //y방향 전환의 최소 및 최대량을 지정
+        curRotateY = Mathf.Clamp(curRotateY, -60.0f, 60.0f);
+        //이동한 방향만큼 카메라를 이동
+        cameraRoot.rotation = Quaternion.Euler(curRotateY, cameraRoot.eulerAngles.y, cameraRoot.eulerAngles.z);
     }
 
     private bool IsGrounded()

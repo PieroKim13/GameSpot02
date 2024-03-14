@@ -173,7 +173,7 @@ public partial class @PlayerInputAction: IInputActionCollection2, IDisposable
                 {
                     ""name"": """",
                     ""id"": ""7c1fb3e1-6768-47f1-8674-c46368019479"",
-                    ""path"": ""<Keyboard>/delete"",
+                    ""path"": ""<Mouse>/delta"",
                     ""interactions"": """",
                     ""processors"": """",
                     ""groups"": """",
